@@ -1,34 +1,64 @@
 # app/services/vectorstore.py
-from typing import List, Dict, Any, Tuple
-import numpy as np
 
-try:
-    import faiss  # type: ignore
-except Exception:
-    faiss = None
+import os
+import json
+import numpy as np
+import faiss
+from typing import List, Dict, Any, Tuple
+
+
+INDEX_PATH = "storage/faiss.index"
+META_PATH = "storage/metadata.json"
+
 
 class VectorStore:
-    def __init__(self, dim: int):
-        if faiss is None:
-            raise RuntimeError("faiss is not installed")
-        self.dim = dim
-        # Inner product index; with normalized vectors, IP == cosine similarity
-        self.index = faiss.IndexFlatIP(dim)
-        self.meta: List[Dict[str, Any]] = []
+    """
+    Persistent FAISS-backed vector store.
+    """
 
-    def add(self, vectors: np.ndarray, metadatas: List[Dict[str, Any]]) -> None:
-        assert vectors.dtype == np.float32
-        assert vectors.shape[1] == self.dim
+    def __init__(self, dim: int):
+        self.dim = dim
+
+        os.makedirs("storage", exist_ok=True)
+
+        if os.path.exists(INDEX_PATH):
+            self.index = faiss.read_index(INDEX_PATH)
+        else:
+            self.index = faiss.IndexFlatIP(dim)
+
+        if os.path.exists(META_PATH):
+            with open(META_PATH, "r", encoding="utf-8") as f:
+                self.meta = json.load(f)
+        else:
+            self.meta: List[Dict[str, Any]] = []
+
+    def add(self, vectors: np.ndarray, metadatas: List[Dict[str, Any]]):
+
+        if vectors.dtype != np.float32:
+            vectors = vectors.astype(np.float32)
+
         self.index.add(vectors)
         self.meta.extend(metadatas)
 
+        self._persist()
+
     def search(self, query_vec: np.ndarray, top_k: int) -> List[Tuple[float, Dict[str, Any]]]:
-        assert query_vec.dtype == np.float32
-        assert query_vec.shape == (1, self.dim)
-        scores, idxs = self.index.search(query_vec, top_k)
-        results: List[Tuple[float, Dict[str, Any]]] = []
-        for s, i in zip(scores[0].tolist(), idxs[0].tolist()):
-            if i == -1:
+
+        if self.index.ntotal == 0:
+            return []
+
+        scores, indices = self.index.search(query_vec, top_k)
+
+        results = []
+        for score, idx in zip(scores[0], indices[0]):
+            if idx == -1:
                 continue
-            results.append((float(s), self.meta[i]))
+            results.append((float(score), self.meta[idx]))
+
         return results
+
+    def _persist(self):
+        faiss.write_index(self.index, INDEX_PATH)
+
+        with open(META_PATH, "w", encoding="utf-8") as f:
+            json.dump(self.meta, f, ensure_ascii=False, indent=2)
