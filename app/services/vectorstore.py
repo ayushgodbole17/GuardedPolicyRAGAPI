@@ -13,7 +13,9 @@ META_PATH = "storage/metadata.json"
 
 class VectorStore:
     """
-    Persistent FAISS-backed vector store.
+    Persistent FAISS-backed vector store with support for document deletion.
+    Uses IndexFlatIP (inner product) — equivalent to cosine similarity when
+    vectors are L2-normalised prior to insertion.
     """
 
     def __init__(self, dim: int):
@@ -32,18 +34,52 @@ class VectorStore:
         else:
             self.meta: List[Dict[str, Any]] = []
 
-    def add(self, vectors: np.ndarray, metadatas: List[Dict[str, Any]]):
+    # ------------------------------------------------------------------
+    # Write operations
+    # ------------------------------------------------------------------
 
+    def add(self, vectors: np.ndarray, metadatas: List[Dict[str, Any]]) -> None:
         if vectors.dtype != np.float32:
             vectors = vectors.astype(np.float32)
 
         self.index.add(vectors)
         self.meta.extend(metadatas)
-
         self._persist()
 
-    def search(self, query_vec: np.ndarray, top_k: int) -> List[Tuple[float, Dict[str, Any]]]:
+    def delete_by_doc_id(self, doc_id: str) -> int:
+        """
+        Remove all chunks belonging to *doc_id*.
 
+        FAISS IndexFlatIP doesn't support in-place deletion, so we rebuild
+        the index from the surviving vectors using reconstruct_n().
+
+        Returns:
+            Number of chunks removed.
+        """
+        keep_mask = [i for i, m in enumerate(self.meta) if m["doc_id"] != doc_id]
+        removed = len(self.meta) - len(keep_mask)
+
+        if removed == 0:
+            return 0
+
+        new_index = faiss.IndexFlatIP(self.dim)
+
+        if keep_mask:
+            all_vectors = self.index.reconstruct_n(0, self.index.ntotal)
+            kept_vectors = all_vectors[keep_mask].astype(np.float32)
+            new_index.add(kept_vectors)
+
+        self.index = new_index
+        self.meta = [self.meta[i] for i in keep_mask]
+        self._persist()
+
+        return removed
+
+    # ------------------------------------------------------------------
+    # Read operations
+    # ------------------------------------------------------------------
+
+    def search(self, query_vec: np.ndarray, top_k: int) -> List[Tuple[float, Dict[str, Any]]]:
         if self.index.ntotal == 0:
             return []
 
@@ -57,8 +93,25 @@ class VectorStore:
 
         return results
 
-    def _persist(self):
-        faiss.write_index(self.index, INDEX_PATH)
+    def list_documents(self) -> List[Dict[str, Any]]:
+        """Return one summary record per unique document."""
+        seen: Dict[str, Dict[str, Any]] = {}
+        for m in self.meta:
+            did = m["doc_id"]
+            if did not in seen:
+                seen[did] = {
+                    "doc_id": did,
+                    "document_name": m["document_name"],
+                    "chunk_count": 0,
+                }
+            seen[did]["chunk_count"] += 1
+        return list(seen.values())
 
+    # ------------------------------------------------------------------
+    # Persistence
+    # ------------------------------------------------------------------
+
+    def _persist(self) -> None:
+        faiss.write_index(self.index, INDEX_PATH)
         with open(META_PATH, "w", encoding="utf-8") as f:
             json.dump(self.meta, f, ensure_ascii=False, indent=2)

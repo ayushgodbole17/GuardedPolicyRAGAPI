@@ -12,8 +12,16 @@ class Chunk:
     page: Optional[int] = None
 
 
-def chunk_text(text: str) -> List[Chunk]:
+def chunk_text(text: str, chunk_id_offset: int = 0) -> List[Chunk]:
+    """
+    Splits text into overlapping chunks, snapping boundaries to the nearest
+    whitespace so words are never split mid-token.
 
+    Args:
+        text: The raw text to chunk.
+        chunk_id_offset: Starting index for chunk IDs (useful when chunking
+                         multiple pages of the same document sequentially).
+    """
     target_chars = settings.CHUNK_SIZE
     overlap_chars = settings.CHUNK_OVERLAP
 
@@ -23,20 +31,35 @@ def chunk_text(text: str) -> List[Chunk]:
 
     chunks: List[Chunk] = []
     start = 0
-    idx = 0
+    idx = chunk_id_offset
     n = len(text)
 
     while start < n:
         end = min(start + target_chars, n)
+
+        # Snap the end boundary to the nearest whitespace so we never cut
+        # a word in half (only when we're not already at the end of the text).
+        if end < n:
+            boundary = text.rfind(" ", start, end)
+            if boundary > start:
+                end = boundary
+
         chunk = text[start:end].strip()
 
         if chunk:
             chunks.append(Chunk(chunk_id=f"c{idx}", text=chunk))
             idx += 1
 
-        if end == n:
+        if end >= n:
             break
 
-        start = max(0, end - overlap_chars)
+        # Step back by overlap_chars, then snap forward to the next word start
+        # so the overlap region also begins on a clean word boundary.
+        new_start = max(0, end - overlap_chars)
+        if new_start > 0:
+            boundary = text.find(" ", new_start)
+            if boundary != -1 and boundary < end:
+                new_start = boundary + 1
+        start = new_start
 
     return chunks

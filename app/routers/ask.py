@@ -22,22 +22,19 @@ async def ask(req: AskRequest):
 
     top_k = req.top_k if req.top_k is not None else settings.DEFAULT_TOP_K
 
-    # 1️⃣ Retrieval
+    # 1. Retrieval
     hits, similarities = await retrieve(req.question, top_k)
 
-    # 2️⃣ Guardrail
+    # 2. Guardrail — decide before spending money on the LLM
     decision = decide(similarities, settings.SIMILARITY_THRESHOLD)
 
-    latency_ms = int((time() - start_time) * 1000)
-
-    logger.info(
-        f"Question='{req.question}' | "
-        f"MaxSim={max(similarities) if similarities else 0:.4f} | "
-        f"Confidence={decision.confidence:.4f} | "
-        f"Refused={decision.refused}"
-    )
-
     if decision.refused:
+        latency_ms = int((time() - start_time) * 1000)
+        logger.info(
+            f"REFUSED | question='{req.question}' | "
+            f"max_sim={max(similarities) if similarities else 0:.4f} | "
+            f"reason={decision.reason} | latency_ms={latency_ms}"
+        )
         return AskResponse(
             answer="I cannot find this information in the provided documents.",
             refused=True,
@@ -52,9 +49,18 @@ async def ask(req: AskRequest):
             },
         )
 
-    # 3️⃣ Generation
+    # 3. Generation — latency is measured end-to-end including LLM call
     context_texts = [hit["text"] for hit in hits]
     answer = await generate_answer(req.question, context_texts)
+
+    latency_ms = int((time() - start_time) * 1000)
+
+    logger.info(
+        f"ANSWERED | question='{req.question}' | "
+        f"max_sim={max(similarities):.4f} | "
+        f"confidence={decision.confidence:.4f} | "
+        f"latency_ms={latency_ms}"
+    )
 
     hit_models = [
         ChunkHit(

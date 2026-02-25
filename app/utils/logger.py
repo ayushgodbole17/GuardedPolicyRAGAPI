@@ -1,25 +1,39 @@
 # app/utils/logger.py
 
+import json
 import logging
 import sys
+from datetime import datetime, timezone
 
 
-def setup_logger():
+class _JSONFormatter(logging.Formatter):
+    """
+    Emits each log record as a single JSON line.
+    Compatible with log aggregation tools (Loki, CloudWatch, Datadog, etc.).
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        payload: dict = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "msg": record.getMessage(),
+        }
+        if record.exc_info:
+            payload["exc"] = self.formatException(record.exc_info)
+        return json.dumps(payload)
+
+
+def setup_logger() -> logging.Logger:
     logger = logging.getLogger("guarded_rag")
 
     if logger.handlers:
-        return logger  # prevent duplicate handlers
+        return logger  # prevent duplicate handlers on reload
 
     logger.setLevel(logging.INFO)
 
     handler = logging.StreamHandler(sys.stdout)
-
-    formatter = logging.Formatter(
-        fmt="%(asctime)s | %(levelname)s | %(message)s",
-        datefmt="%Y-%m-%d %H:%M:%S",
-    )
-
-    handler.setFormatter(formatter)
+    handler.setFormatter(_JSONFormatter())
     logger.addHandler(handler)
 
     return logger

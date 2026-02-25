@@ -1,6 +1,7 @@
 # app/services/llm.py
 
 from openai import AsyncOpenAI
+from app.utils.config import settings
 
 client = AsyncOpenAI()
 
@@ -31,7 +32,7 @@ Question:
 """
 
     response = await client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=settings.LLM_MODEL,
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT.strip()},
             {"role": "user", "content": user_prompt.strip()},
