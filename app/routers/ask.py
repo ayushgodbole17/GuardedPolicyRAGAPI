@@ -1,12 +1,15 @@
+import json
 from fastapi import APIRouter
+from fastapi.responses import StreamingResponse
 from time import time
+from typing import AsyncGenerator
 
 from app.models.request_models import AskRequest
 from app.models.response_models import AskResponse, ChunkHit
 
 from app.services.retrieval import retrieve
 from app.services.guardrails import decide
-from app.services.llm import generate_answer
+from app.services.llm import generate_answer, stream_answer
 from app.utils.config import settings
 from app.utils.logger import logger
 
@@ -81,3 +84,49 @@ async def ask(req: AskRequest):
             "threshold": settings.SIMILARITY_THRESHOLD,
         },
     )
+
+
+@router.post("/ask/stream")
+async def ask_stream(req: AskRequest):
+    start_time = time()
+    top_k = req.top_k if req.top_k is not None else settings.DEFAULT_TOP_K
+
+    hits, similarities = await retrieve(req.question, top_k)
+    decision = decide(similarities, settings.SIMILARITY_THRESHOLD)
+
+    if decision.refused:
+        latency_ms = int((time() - start_time) * 1000)
+        logger.info(
+            f"REFUSED | question='{req.question}' | "
+            f"max_sim={max(similarities) if similarities else 0:.4f} | "
+            f"reason={decision.reason} | latency_ms={latency_ms}"
+        )
+        payload = json.dumps({
+            "refused": True,
+            "reason": decision.reason,
+            "confidence": decision.confidence,
+        })
+
+        async def refused_body() -> AsyncGenerator[str, None]:
+            yield f"data: {payload}\n\n"
+
+        return StreamingResponse(refused_body(), media_type="text/event-stream")
+
+    context_texts = [hit["text"] for hit in hits]
+
+    async def token_stream() -> AsyncGenerator[str, None]:
+        full_response = []
+        async for token in stream_answer(req.question, context_texts):
+            full_response.append(token)
+            yield f"data: {token}\n\n"
+        yield "data: [DONE]\n\n"
+
+        latency_ms = int((time() - start_time) * 1000)
+        logger.info(
+            f"STREAMED | question='{req.question}' | "
+            f"max_sim={max(similarities):.4f} | "
+            f"confidence={decision.confidence:.4f} | "
+            f"latency_ms={latency_ms}"
+        )
+
+    return StreamingResponse(token_stream(), media_type="text/event-stream")

@@ -1,3 +1,4 @@
+from typing import AsyncGenerator
 from openai import AsyncOpenAI
 from app.utils.config import settings
 
@@ -35,3 +36,30 @@ Question:
     )
 
     return response.choices[0].message.content.strip()
+
+
+async def stream_answer(question: str, context_chunks: list[str]) -> AsyncGenerator[str, None]:
+    context_block = "\n\n---\n\n".join(context_chunks)
+
+    user_prompt = f"""
+Context:
+{context_block}
+
+Question:
+{question}
+"""
+
+    stream = await client.chat.completions.create(
+        model=settings.LLM_MODEL,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT.strip()},
+            {"role": "user", "content": user_prompt.strip()},
+        ],
+        temperature=0,
+        stream=True,
+    )
+
+    async for chunk in stream:
+        token = chunk.choices[0].delta.content
+        if token:
+            yield token
