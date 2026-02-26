@@ -12,23 +12,15 @@ Features:
 - Structured logging
 - Config via .env
 
-Setup
-1. Create venv
-python -m venv .venv
-.venv\Scripts\activate
+Setup (Docker)
+1. Copy .env.example to .env and add your OpenAI key
+2. docker compose up --build
 
-2. Install
-pip install -r requirements.txt
-
-3. Configure .env
-OPENAI_API_KEY=your_key
-SIMILARITY_THRESHOLD=0.45
-DEFAULT_TOP_K=5
-CHUNK_SIZE=2200
-CHUNK_OVERLAP=300
-
-4. Run
-uvicorn app.main:app --reload
+Setup (manual)
+1. python -m venv .venv && .venv\Scripts\activate
+2. pip install -r requirements.txt
+3. Copy .env.example to .env and add your OpenAI key
+4. uvicorn app.main:app --reload
 
 Docs:
 http://127.0.0.1:8000/docs
@@ -66,7 +58,5 @@ Prevents low-evidence hallucination.
 
 Storage
 
-Persistent files:
-
-storage/faiss.index
-storage/metadata.json
+storage/ is gitignored. The FAISS index and metadata are created locally on first ingest.
+When using Docker, storage/ is bind-mounted so data persists across container restarts.
