@@ -1,5 +1,3 @@
-# app/utils/logger.py
-
 import json
 import logging
 import sys
@@ -7,11 +5,6 @@ from datetime import datetime, timezone
 
 
 class _JSONFormatter(logging.Formatter):
-    """
-    Emits each log record as a single JSON line.
-    Compatible with log aggregation tools (Loki, CloudWatch, Datadog, etc.).
-    """
-
     def format(self, record: logging.LogRecord) -> str:
         payload: dict = {
             "ts": datetime.now(timezone.utc).isoformat(),
@@ -28,7 +21,7 @@ def setup_logger() -> logging.Logger:
     logger = logging.getLogger("guarded_rag")
 
     if logger.handlers:
-        return logger  # prevent duplicate handlers on reload
+        return logger
 
     logger.setLevel(logging.INFO)
 

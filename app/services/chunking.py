@@ -1,5 +1,3 @@
-# app/services/chunking.py
-
 from dataclasses import dataclass
 from typing import List, Optional
 from app.utils.config import settings
@@ -13,15 +11,6 @@ class Chunk:
 
 
 def chunk_text(text: str, chunk_id_offset: int = 0) -> List[Chunk]:
-    """
-    Splits text into overlapping chunks, snapping boundaries to the nearest
-    whitespace so words are never split mid-token.
-
-    Args:
-        text: The raw text to chunk.
-        chunk_id_offset: Starting index for chunk IDs (useful when chunking
-                         multiple pages of the same document sequentially).
-    """
     target_chars = settings.CHUNK_SIZE
     overlap_chars = settings.CHUNK_OVERLAP
 
@@ -37,8 +26,6 @@ def chunk_text(text: str, chunk_id_offset: int = 0) -> List[Chunk]:
     while start < n:
         end = min(start + target_chars, n)
 
-        # Snap the end boundary to the nearest whitespace so we never cut
-        # a word in half (only when we're not already at the end of the text).
         if end < n:
             boundary = text.rfind(" ", start, end)
             if boundary > start:
@@ -53,8 +40,6 @@ def chunk_text(text: str, chunk_id_offset: int = 0) -> List[Chunk]:
         if end >= n:
             break
 
-        # Step back by overlap_chars, then snap forward to the next word start
-        # so the overlap region also begins on a clean word boundary.
         new_start = max(0, end - overlap_chars)
         if new_start > 0:
             boundary = text.find(" ", new_start)

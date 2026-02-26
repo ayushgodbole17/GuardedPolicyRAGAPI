@@ -1,5 +1,3 @@
-# app/routers/ingest.py
-
 import io
 from fastapi import APIRouter, UploadFile, File, HTTPException
 from typing import List
@@ -18,12 +16,6 @@ _MAX_BYTES = settings.MAX_UPLOAD_MB * 1024 * 1024
 
 
 def _extract_pdf_pages(content: bytes) -> List[tuple[str, int]]:
-    """
-    Extract text per-page from a PDF so page numbers can be stored in metadata.
-
-    Returns:
-        List of (page_text, page_number) tuples (1-indexed, empty pages skipped).
-    """
     reader = PdfReader(io.BytesIO(content))
     pages = []
     for i, page in enumerate(reader.pages, start=1):
@@ -40,13 +32,6 @@ def _extract_docx_text(content: bytes) -> str:
 
 @router.post("/ingest")
 async def ingest_files(files: List[UploadFile] = File(...)):
-    """
-    Ingest one or more PDF or DOCX policy documents.
-
-    Each document is chunked, embedded, and stored in the FAISS vector index.
-    Page numbers are tracked for PDF files and surfaced in query hit metadata.
-    """
-
     if not files:
         raise HTTPException(status_code=400, detail="No files uploaded.")
 
@@ -57,7 +42,6 @@ async def ingest_files(files: List[UploadFile] = File(...)):
         lower = filename.lower()
         doc_id = str(uuid4())
 
-        # ── File size guard ────────────────────────────────────────────────
         content = await file.read()
         if len(content) > _MAX_BYTES:
             raise HTTPException(
@@ -68,7 +52,6 @@ async def ingest_files(files: List[UploadFile] = File(...)):
                 ),
             )
 
-        # ── Text extraction ────────────────────────────────────────────────
         all_chunks = []
         all_metadatas = []
         chunk_counter = 0
@@ -118,7 +101,6 @@ async def ingest_files(files: List[UploadFile] = File(...)):
                 detail=f"Unsupported file type: '{filename}'. Only PDF and DOCX are accepted.",
             )
 
-        # ── Embed & store ─────────────────────────────────────────────────
         texts = [c.text for c in all_chunks]
         vectors = await container.embedder.embed_texts_async(texts)
         container.vectorstore.add(vectors, all_metadatas)

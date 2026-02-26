@@ -1,5 +1,3 @@
-# app/routers/ask.py
-
 from fastapi import APIRouter
 from time import time
 
@@ -22,10 +20,7 @@ async def ask(req: AskRequest):
 
     top_k = req.top_k if req.top_k is not None else settings.DEFAULT_TOP_K
 
-    # 1. Retrieval
     hits, similarities = await retrieve(req.question, top_k)
-
-    # 2. Guardrail — decide before spending money on the LLM
     decision = decide(similarities, settings.SIMILARITY_THRESHOLD)
 
     if decision.refused:
@@ -49,7 +44,6 @@ async def ask(req: AskRequest):
             },
         )
 
-    # 3. Generation — latency is measured end-to-end including LLM call
     context_texts = [hit["text"] for hit in hits]
     answer = await generate_answer(req.question, context_texts)
 

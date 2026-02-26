@@ -1,5 +1,3 @@
-# app/services/llm.py
-
 from openai import AsyncOpenAI
 from app.utils.config import settings
 
@@ -17,10 +15,6 @@ Do not use outside knowledge.
 
 
 async def generate_answer(question: str, context_chunks: list[str]) -> str:
-    """
-    Generates grounded answer using retrieved context.
-    """
-
     context_block = "\n\n---\n\n".join(context_chunks)
 
     user_prompt = f"""

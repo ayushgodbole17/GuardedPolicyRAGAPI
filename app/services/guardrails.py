@@ -1,30 +1,15 @@
-# app/services/guardrails.py
-
 from dataclasses import dataclass
 from typing import List, Optional
 
 
 @dataclass
 class GuardrailDecision:
-    """
-    Represents the outcome of similarity-based guardrail evaluation.
-    """
     refused: bool
     reason: Optional[str]
     confidence: float
 
 
 def decide(similarities: List[float], threshold: float) -> GuardrailDecision:
-    """
-    Apply similarity threshold logic.
-
-    Refusal rule:
-        If no results OR max similarity < threshold → refuse.
-
-    Confidence:
-        Mean of similarities (heuristic measure of retrieval strength).
-    """
-
     if not similarities:
         return GuardrailDecision(
             refused=True,

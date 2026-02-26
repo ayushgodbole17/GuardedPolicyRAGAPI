@@ -1,12 +1,8 @@
-# app/utils/config.py
-
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Maps OpenAI embedding model names to their output dimensions.
-# If EMBEDDING_MODEL changes, VECTOR_DIM automatically stays in sync.
 _MODEL_DIMS: dict[str, int] = {
     "text-embedding-3-small": 1536,
     "text-embedding-3-large": 3072,
@@ -28,7 +24,6 @@ class Settings:
 
     @property
     def VECTOR_DIM(self) -> int:
-        """Derived from EMBEDDING_MODEL so they can never fall out of sync."""
         return _MODEL_DIMS.get(self.EMBEDDING_MODEL, 1536)
 
 

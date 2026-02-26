@@ -1,5 +1,3 @@
-# app/services/vectorstore.py
-
 import os
 import json
 import numpy as np
@@ -12,12 +10,6 @@ META_PATH = "storage/metadata.json"
 
 
 class VectorStore:
-    """
-    Persistent FAISS-backed vector store with support for document deletion.
-    Uses IndexFlatIP (inner product) — equivalent to cosine similarity when
-    vectors are L2-normalised prior to insertion.
-    """
-
     def __init__(self, dim: int):
         self.dim = dim
 
@@ -34,10 +26,6 @@ class VectorStore:
         else:
             self.meta: List[Dict[str, Any]] = []
 
-    # ------------------------------------------------------------------
-    # Write operations
-    # ------------------------------------------------------------------
-
     def add(self, vectors: np.ndarray, metadatas: List[Dict[str, Any]]) -> None:
         if vectors.dtype != np.float32:
             vectors = vectors.astype(np.float32)
@@ -47,15 +35,6 @@ class VectorStore:
         self._persist()
 
     def delete_by_doc_id(self, doc_id: str) -> int:
-        """
-        Remove all chunks belonging to *doc_id*.
-
-        FAISS IndexFlatIP doesn't support in-place deletion, so we rebuild
-        the index from the surviving vectors using reconstruct_n().
-
-        Returns:
-            Number of chunks removed.
-        """
         keep_mask = [i for i, m in enumerate(self.meta) if m["doc_id"] != doc_id]
         removed = len(self.meta) - len(keep_mask)
 
@@ -75,10 +54,6 @@ class VectorStore:
 
         return removed
 
-    # ------------------------------------------------------------------
-    # Read operations
-    # ------------------------------------------------------------------
-
     def search(self, query_vec: np.ndarray, top_k: int) -> List[Tuple[float, Dict[str, Any]]]:
         if self.index.ntotal == 0:
             return []
@@ -94,7 +69,6 @@ class VectorStore:
         return results
 
     def list_documents(self) -> List[Dict[str, Any]]:
-        """Return one summary record per unique document."""
         seen: Dict[str, Dict[str, Any]] = {}
         for m in self.meta:
             did = m["doc_id"]
@@ -106,10 +80,6 @@ class VectorStore:
                 }
             seen[did]["chunk_count"] += 1
         return list(seen.values())
-
-    # ------------------------------------------------------------------
-    # Persistence
-    # ------------------------------------------------------------------
 
     def _persist(self) -> None:
         faiss.write_index(self.index, INDEX_PATH)
