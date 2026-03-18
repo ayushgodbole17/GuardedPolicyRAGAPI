@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv
 
-load_dotenv()
+load_dotenv(override=True)
 
 _MODEL_DIMS: dict[str, int] = {
     "text-embedding-3-small": 1536,
@@ -21,6 +21,11 @@ class Settings:
     CHUNK_OVERLAP: int = int(os.getenv("CHUNK_OVERLAP", "300"))
 
     MAX_UPLOAD_MB: int = int(os.getenv("MAX_UPLOAD_MB", "50"))
+
+    # Langfuse — optional. If keys are absent, tracing is silently skipped.
+    LANGFUSE_PUBLIC_KEY: str = os.getenv("LANGFUSE_PUBLIC_KEY", "")
+    LANGFUSE_SECRET_KEY: str = os.getenv("LANGFUSE_SECRET_KEY", "")
+    LANGFUSE_BASE_URL: str = os.getenv("LANGFUSE_BASE_URL", "https://cloud.langfuse.com")
 
     @property
     def VECTOR_DIM(self) -> int:

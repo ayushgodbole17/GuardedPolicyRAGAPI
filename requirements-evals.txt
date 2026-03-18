@@ -1,0 +1,4 @@
+# Eval-only dependencies — not needed by the API at runtime.
+# Install separately: pip install -r requirements-evals.txt
+ragas>=0.2.0
+datasets>=2.0.0

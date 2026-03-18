@@ -1,60 +1,62 @@
+from __future__ import annotations
+
 from typing import AsyncGenerator
+
 from openai import AsyncOpenAI
+
 from app.utils.config import settings
+from app.services.observability import get_langfuse, get_system_prompt
 
 client = AsyncOpenAI()
 
-SYSTEM_PROMPT = """
-You are a policy assistant.
-
-You must answer ONLY using the provided context.
-If the answer is not explicitly contained in the context,
-respond with: "I cannot find this information in the provided documents."
-
-Do not use outside knowledge.
-"""
+_system_prompt_text, _prompt_obj = get_system_prompt()
 
 
 async def generate_answer(question: str, context_chunks: list[str]) -> str:
-    context_block = "\n\n---\n\n".join(context_chunks)
+    lf = get_langfuse()
+    messages = [
+        {"role": "system", "content": _system_prompt_text},
+        {"role": "user", "content": f"Context:\n{chr(10).join(context_chunks)}\n\nQuestion:\n{question}"},
+    ]
 
-    user_prompt = f"""
-Context:
-{context_block}
-
-Question:
-{question}
-"""
+    if lf:
+        with lf.start_as_current_observation(name="llm-generation", as_type="generation"):
+            lf.update_current_generation(
+                model=settings.LLM_MODEL,
+                input=messages,
+            )
+            response = await client.chat.completions.create(
+                model=settings.LLM_MODEL,
+                messages=messages,
+                temperature=0,
+            )
+            answer = response.choices[0].message.content.strip()
+            lf.update_current_generation(
+                output=answer,
+                usage_details={
+                    "input": response.usage.prompt_tokens,
+                    "output": response.usage.completion_tokens,
+                },
+            )
+            return answer
 
     response = await client.chat.completions.create(
         model=settings.LLM_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT.strip()},
-            {"role": "user", "content": user_prompt.strip()},
-        ],
+        messages=messages,
         temperature=0,
     )
-
     return response.choices[0].message.content.strip()
 
 
 async def stream_answer(question: str, context_chunks: list[str]) -> AsyncGenerator[str, None]:
-    context_block = "\n\n---\n\n".join(context_chunks)
-
-    user_prompt = f"""
-Context:
-{context_block}
-
-Question:
-{question}
-"""
+    messages = [
+        {"role": "system", "content": _system_prompt_text},
+        {"role": "user", "content": f"Context:\n{chr(10).join(context_chunks)}\n\nQuestion:\n{question}"},
+    ]
 
     stream = await client.chat.completions.create(
         model=settings.LLM_MODEL,
-        messages=[
-            {"role": "system", "content": SYSTEM_PROMPT.strip()},
-            {"role": "user", "content": user_prompt.strip()},
-        ],
+        messages=messages,
         temperature=0,
         stream=True,
     )

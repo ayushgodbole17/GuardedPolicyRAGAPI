@@ -1,62 +1,87 @@
-Guarded Policy RAG API
-FastAPI backend for policy document Q&A using Retrieval-Augmented Generation (RAG) with similarity-based refusal guardrails.
+# Guarded Policy RAG API
 
-Features:
-- Multi-file ingestion (.docx, .pdf)
-- Semantic chunking with overlap
-- OpenAI embeddings (normalized)
-- Persistent FAISS vector index
-- Similarity threshold guardrail
-- Grounded LLM responses
-- Source attribution + confidence score
-- Structured logging
-- Config via .env
+FastAPI backend for policy document Q&A. Uses RAG with similarity-based guardrails — questions without supporting evidence in the index are refused rather than hallucinated.
 
-Setup (Docker)
-1. Copy .env.example to .env and add your OpenAI key
-2. docker compose up --build
+## Features
 
-Setup (manual)
-1. python -m venv .venv && .venv\Scripts\activate
-2. pip install -r requirements.txt
-3. Copy .env.example to .env and add your OpenAI key
-4. uvicorn app.main:app --reload
+- Ingest PDF and DOCX files
+- OpenAI embeddings stored in a persistent FAISS index
+- Similarity threshold guardrail — low-confidence queries are refused
+- Streaming and non-streaming responses
+- Langfuse tracing (optional)
+- Prometheus metrics + Grafana dashboard
 
-Docs:
-http://127.0.0.1:8000/docs
+## Quickstart
 
-Endpoints
-POST /ingest
+### Docker (recommended)
 
-Upload multiple .docx or .pdf files.
+```bash
+cp .env.example .env   # fill in OPENAI_API_KEY
+docker compose up --build
+```
 
-Stores:
-- chunk embeddings
-- metadata
-- persistent FAISS index
+| Service    | URL                          |
+|------------|------------------------------|
+| API docs   | http://localhost:8000/docs   |
+| Grafana    | http://localhost:3001        |
+| Prometheus | http://localhost:9090        |
 
-POST /ask
-Input:
-{
-  "question": "How many sick leave days are allowed?"
-}
+Grafana login: admin / admin
 
-Output:
-- answer
-- refused
-- confidence
-- hits
-- similarity trace
-- latency
+### Manual
 
-Guardrail Logic:
-Refuse if:
-- max_similarity < threshold
+```bash
+python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+cp .env.example .env
+uvicorn app.main:app --reload
+```
 
-Confidence = mean similarity of retrieved chunks.
-Prevents low-evidence hallucination.
+## Endpoints
 
-Storage
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | /ingest | Upload PDF or DOCX files |
+| POST | /ask | Ask a question |
+| POST | /ask/stream | Streaming response (SSE) |
+| GET | /documents | List ingested documents |
+| DELETE | /documents/{doc_id} | Delete a document |
+| GET | /health | Liveness probe |
+| GET | /ready | Readiness probe |
+| GET | /metrics | Prometheus metrics |
 
-storage/ is gitignored. The FAISS index and metadata are created locally on first ingest.
-When using Docker, storage/ is bind-mounted so data persists across container restarts.
+## Langfuse (optional)
+
+Tracing is disabled if keys are not set. To enable:
+
+1. Create a free account at [cloud.langfuse.com](https://cloud.langfuse.com)
+2. Add `LANGFUSE_PUBLIC_KEY` and `LANGFUSE_SECRET_KEY` to `.env`
+3. Create a prompt named `system_prompt-v1` (text type) in Langfuse Prompt Management
+
+## Evals
+
+Requires a running API with documents already ingested.
+
+```bash
+pip install -r requirements-evals.txt
+
+python -m evals.run_evals                 # keyword check + RAGAS metrics
+python -m evals.run_evals --skip-ragas   # keyword check only
+```
+
+## Load testing
+
+```bash
+pip install locust
+locust -f load_test/locustfile.py --host http://localhost:8000
+```
+
+Open http://localhost:8089. Simulates policy users (weight 3) and out-of-domain noise users (weight 1) to generate realistic refusal rate data.
+
+## Configuration
+
+All settings are loaded from `.env`. See `.env.example` for available options and defaults.
+
+## Storage
+
+`storage/` holds the FAISS index and chunk metadata. It is gitignored. In Docker it is bind-mounted so data persists across container restarts.

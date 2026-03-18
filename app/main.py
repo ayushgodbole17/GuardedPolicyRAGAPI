@@ -3,11 +3,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from prometheus_client import generate_latest, CONTENT_TYPE_LATEST
+from prometheus_fastapi_instrumentator import Instrumentator
 
 from app.routers.ingest import router as ingest_router
 from app.routers.ask import router as ask_router
 from app.routers.documents import router as documents_router
 from app.services.container import container
+from app.services import metrics  # noqa: F401
 from app.utils.config import settings
 from app.utils.logger import logger
 
@@ -70,3 +74,10 @@ async def ready():
 app.include_router(ingest_router, tags=["ingestion"])
 app.include_router(ask_router, tags=["query"])
 app.include_router(documents_router, tags=["documents"])
+
+Instrumentator().instrument(app)
+
+
+@app.get("/metrics", tags=["ops"], include_in_schema=False)
+async def metrics():
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)

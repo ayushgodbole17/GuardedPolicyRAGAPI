@@ -1,5 +1,12 @@
 .env
 .venv/
 __pycache__/
-.claude
+*.pyc
+*.pyo
+.pytest_cache/
+*.egg-info/
+dist/
+.claude/
 storage/
+evals/results.json
+.vscode/
