@@ -42,10 +42,17 @@ def _run_ragas(ragas_samples: list[dict]) -> dict[str, float]:
     try:
         from ragas import evaluate
         from ragas.dataset_schema import EvaluationDataset, SingleTurnSample
-        from ragas.metrics import Faithfulness, AnswerRelevancy
+        from ragas.metrics.collections import Faithfulness, AnswerRelevancy
+        from ragas.llms import llm_factory
+        from ragas.embeddings import embedding_factory
+        from openai import OpenAI
     except ImportError:
         print("\n[RAGAS] not installed — run: pip install -r requirements-evals.txt\n")
         return {}
+
+    openai_client = OpenAI()
+    llm = llm_factory("gpt-4o-mini", client=openai_client)
+    embeddings = embedding_factory("openai", model="text-embedding-3-small", client=openai_client)
 
     samples = [
         SingleTurnSample(
@@ -58,7 +65,7 @@ def _run_ragas(ragas_samples: list[dict]) -> dict[str, float]:
 
     dataset = EvaluationDataset(samples=samples)
     print("\nRunning RAGAS evaluation...")
-    result = evaluate(dataset=dataset, metrics=[Faithfulness(), AnswerRelevancy()])
+    result = evaluate(dataset=dataset, metrics=[Faithfulness(llm=llm), AnswerRelevancy(llm=llm, embeddings=embeddings)])
     return result.to_pandas()[["faithfulness", "answer_relevancy"]].mean().to_dict()
 
 
@@ -149,6 +156,6 @@ async def run(base_url: str, skip_ragas: bool) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--base-url", default="http://localhost:8000")
-    parser.add_argument("--skip-ragas", action="store_true")
+    parser.add_argument("--ragas", action="store_true", help="Run RAGAS metrics (slower, costs tokens)")
     args = parser.parse_args()
-    asyncio.run(run(args.base_url, args.skip_ragas))
+    asyncio.run(run(args.base_url, skip_ragas=not args.ragas))

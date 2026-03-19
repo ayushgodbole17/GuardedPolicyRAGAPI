@@ -63,10 +63,13 @@ Tracing is disabled if keys are not set. To enable:
 Requires a running API with documents already ingested.
 
 ```bash
-pip install -r requirements-evals.txt
+docker compose run --rm evals          # keyword check + RAGAS metrics
+```
 
-python -m evals.run_evals                 # keyword check + RAGAS metrics
-python -m evals.run_evals --skip-ragas   # keyword check only
+To run keyword checks only (faster, no extra API calls):
+
+```bash
+docker compose run --rm evals bash -c "pip install -q -r requirements-evals.txt && python -m evals.run_evals --base-url http://api:8000"
 ```
 
 ## Load testing
